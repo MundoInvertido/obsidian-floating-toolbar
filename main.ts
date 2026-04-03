@@ -5,8 +5,8 @@ interface ToolbarCommand {
 	label: string;
 	icon: string;
 	actionType: 'format' | 'command' | 'divider';
-	actionValue: string;
-	formatBehavior?: 'wrap' | 'prefix';
+	actionValue: string; // command ID or Prefix
+	formatSuffix?: string; // Suffix
 }
 
 interface FloatingToolbarSettings {
@@ -17,9 +17,9 @@ interface FloatingToolbarSettings {
 const DEFAULT_SETTINGS: FloatingToolbarSettings = {
 	toolbarWidth: 250,
 	commands: [
-		{ id: 'bold', label: 'Negrito', icon: 'bold', actionType: 'format', actionValue: '**', formatBehavior: 'wrap' },
-		{ id: 'italic', label: 'Itálico', icon: 'italic', actionType: 'format', actionValue: '*', formatBehavior: 'wrap' },
-		{ id: 'highlighter', label: 'Destaque', icon: 'highlighter', actionType: 'format', actionValue: '==', formatBehavior: 'wrap' },
+		{ id: 'bold', label: 'Negrito', icon: 'bold', actionType: 'format', actionValue: '**', formatSuffix: '**' },
+		{ id: 'italic', label: 'Itálico', icon: 'italic', actionType: 'format', actionValue: '*', formatSuffix: '*' },
+		{ id: 'highlighter', label: 'Destaque', icon: 'highlighter', actionType: 'format', actionValue: '==', formatSuffix: '==' },
 		{ id: 'div1', label: '', icon: '', actionType: 'divider', actionValue: '' },
 		{ id: 'list', label: 'Marcador', icon: 'list', actionType: 'command', actionValue: 'editor:toggle-bullet-list' },
 		{ id: 'indent', label: 'Deslocar para Frente', icon: 'indent', actionType: 'command', actionValue: 'editor:indent-list' },
@@ -127,10 +127,18 @@ export default class FloatingToolbarPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
-		// Migrate older settings
-		this.settings.commands.forEach(c => {
-			if (c.actionType === 'format' && !c.formatBehavior) c.formatBehavior = 'wrap';
+		const loadedData = await this.loadData();
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+		// Migrate older settings (formatBehavior to formatSuffix)
+		this.settings.commands.forEach((c: any) => {
+			if (c.actionType === 'format' && c.formatSuffix === undefined) {
+				if (c.formatBehavior === 'wrap') {
+					c.formatSuffix = c.actionValue;
+				} else {
+					c.formatSuffix = '';
+				}
+				delete c.formatBehavior;
+			}
 		});
 	}
 
@@ -161,7 +169,7 @@ export default class FloatingToolbarPlugin extends Plugin {
 				btn.onclick = (e) => {
 					e.preventDefault();
 					if (cmd.actionType === 'format') {
-						this.applyFormatting(cmd.actionValue, cmd.formatBehavior || 'wrap');
+						this.applyFormatting(cmd.actionValue, cmd.formatSuffix || '');
 					} else if (cmd.actionType === 'command') {
 						// @ts-ignore
 						this.app.commands.executeCommandById(cmd.actionValue);
@@ -236,24 +244,25 @@ export default class FloatingToolbarPlugin extends Plugin {
 		this.activeEditor = null;
 	}
 
-	private applyFormatting(wrapper: string, behavior: 'wrap' | 'prefix') {
+	private applyFormatting(prefix: string, suffix: string) {
 		if (!this.activeEditor) return;
 		const selection = this.activeEditor.getSelection();
 		if (!selection) return;
 
 		let newStr = '';
-		if (behavior === 'wrap') {
-			if (selection.startsWith(wrapper) && selection.endsWith(wrapper)) {
-				newStr = selection.slice(wrapper.length, -wrapper.length);
+		if (suffix) {
+			// Wrap / Asymmetric wrap
+			if (selection.startsWith(prefix) && selection.endsWith(suffix)) {
+				newStr = selection.slice(prefix.length, -suffix.length);
 			} else {
-				newStr = `${wrapper}${selection}${wrapper}`;
+				newStr = `${prefix}${selection}${suffix}`;
 			}
 		} else {
-			// Prefix
-			if (selection.startsWith(wrapper)) {
-				newStr = selection.slice(wrapper.length);
+			// Prefix only
+			if (selection.startsWith(prefix)) {
+				newStr = selection.slice(prefix.length);
 			} else {
-				newStr = `${wrapper}${selection}`;
+				newStr = `${prefix}${selection}`;
 			}
 		}
 		
@@ -294,7 +303,7 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 						icon: 'star',
 						actionType: 'format',
 						actionValue: '',
-						formatBehavior: 'wrap'
+						formatSuffix: ''
 					});
 					await this.plugin.saveSettings();
 					this.display();
@@ -367,8 +376,8 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 						.setValue(cmd.actionType)
 						.onChange(async (value) => {
 							cmd.actionType = value as any;
-							if (cmd.actionType === 'format' && !cmd.formatBehavior) {
-								cmd.formatBehavior = 'wrap';
+							if (cmd.actionType === 'format' && cmd.formatSuffix === undefined) {
+								cmd.formatSuffix = '';
 							}
 							cmd.actionValue = ''; // Clear value to avoid confusion
 							await this.plugin.saveSettings();
@@ -378,25 +387,20 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 				// Sub-configurações baseadas no tipo de ação
 				if (cmd.actionType === 'format') {
 					new Setting(div)
-						.setName('Símbolo de Formatação')
-						.setDesc('Exemplo: "**" para negrito ou "-" para lista.')
+						.setName('Símbolos de Formatação')
+						.setDesc('Defina como o texto será envolvido. Deixe o sufixo vazio se quiser apenas aplicar no início.')
 						.addText(text => text
-							.setPlaceholder('Símbolo')
+							.setPlaceholder('Prefixo (ex: <mark>)')
 							.setValue(cmd.actionValue)
 							.onChange(async (value) => {
 								cmd.actionValue = value;
 								await this.plugin.saveSettings();
-							}));
-
-					new Setting(div)
-						.setName('Comportamento')
-						.setDesc('O símbolo envolve a palavra interia ou aparece apenas no início?')
-						.addDropdown(cb => cb
-							.addOption('wrap', 'Envolver Texto (Início e Fim)')
-							.addOption('prefix', 'Apenas no Início (Prefixo)')
-							.setValue(cmd.formatBehavior || 'wrap')
+							}))
+						.addText(text => text
+							.setPlaceholder('Sufixo (ex: </mark>)')
+							.setValue(cmd.formatSuffix || '')
 							.onChange(async (value) => {
-								cmd.formatBehavior = value as 'wrap' | 'prefix';
+								cmd.formatSuffix = value;
 								await this.plugin.saveSettings();
 							}));
 				} else if (cmd.actionType === 'command') {

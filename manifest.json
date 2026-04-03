@@ -1,0 +1,10 @@
+{
+	"id": "obsidian-floating-toolbar",
+	"name": "Floating Text Toolbar",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Displays a floating formatting toolbar when text is selected.",
+	"author": "Nathan",
+	"authorUrl": "",
+	"isDesktopOnly": false
+}

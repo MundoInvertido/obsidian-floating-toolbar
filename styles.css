@@ -1,0 +1,55 @@
+.floating-toolbar {
+    position: absolute;
+    z-index: 1000;
+    display: flex;
+    gap: 4px;
+    padding: 6px;
+    background-color: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    transform: translateY(10px) scale(0.95);
+    pointer-events: none;
+}
+
+.floating-toolbar.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    pointer-events: auto;
+}
+
+.floating-toolbar-button {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 6px 10px;
+    border-radius: 4px;
+    color: var(--text-normal);
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.floating-toolbar-button:hover {
+    background-color: var(--background-modifier-hover);
+    color: var(--text-accent);
+}
+
+.floating-toolbar-button svg {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    stroke: currentColor;
+    stroke-width: 2;
+}
+
+.floating-toolbar-divider {
+    width: 1px;
+    background-color: var(--background-modifier-border);
+    margin: 0 2px;
+}

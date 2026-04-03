@@ -3,8 +3,8 @@
 	"name": "Floating Text Toolbar",
 	"version": "1.0.0",
 	"minAppVersion": "0.15.0",
-	"description": "Displays a floating formatting toolbar when text is selected.",
-	"author": "Nathan",
+	"description": "Displays a floating formatting toolbar when text is selected, including bold, italic, and highlight options. Allows you to add any command for quick access.",
+	"author": "Nathanel Lacerda",
 	"authorUrl": "",
 	"isDesktopOnly": false
 }

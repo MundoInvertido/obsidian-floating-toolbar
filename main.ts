@@ -74,7 +74,7 @@ export class IconSuggestModal extends FuzzySuggestModal<string> {
 		el.style.display = "flex";
 		el.style.alignItems = "center";
 		el.style.gap = "10px";
-		
+
 		const iconEl = el.createSpan();
 		setIcon(iconEl, item.item);
 		el.createSpan({ text: item.item });
@@ -102,6 +102,9 @@ export default class FloatingToolbarPlugin extends Plugin {
 		);
 
 		this.registerDomEvent(document, 'mouseup', (evt: MouseEvent) => {
+			// Ignorar clique com botão direito (context menu)
+			if (evt.button === 2) return;
+
 			const view = this.app.workspace.getActiveViewOfType(MarkdownView);
 			if (view && view.editor) {
 				setTimeout(() => this.handleSelection(view.editor), 50);
@@ -173,7 +176,7 @@ export default class FloatingToolbarPlugin extends Plugin {
 					} else if (cmd.actionType === 'command') {
 						// @ts-ignore
 						this.app.commands.executeCommandById(cmd.actionValue);
-						
+
 						if (!cmd.actionValue.includes('indent')) {
 							this.hideToolbar();
 						}
@@ -182,20 +185,44 @@ export default class FloatingToolbarPlugin extends Plugin {
 				this.toolbarEl?.appendChild(btn);
 			}
 		});
-		
+
 		this.toolbarEl.addEventListener('mousedown', (e) => {
 			e.preventDefault();
 		});
 	}
 
-	private createButton(iconId: string, ariaLabel: string): HTMLButtonElement {
+	private createButton(icon: string, ariaLabel: string): HTMLButtonElement {
 		const btn = document.createElement('button');
 		btn.addClass('floating-toolbar-button');
 		btn.setAttribute('aria-label', ariaLabel);
-		try {
-			setIcon(btn, iconId);
-		} catch (e) {
-			btn.innerText = '?';
+		
+		const cleanIcon = icon.trim();
+		
+		if (cleanIcon.startsWith('<svg')) {
+			try {
+				const wrapper = document.createElement('div');
+				wrapper.innerHTML = cleanIcon;
+				const svgEl = wrapper.firstElementChild;
+				if (svgEl && svgEl.tagName.toLowerCase() === 'svg') {
+					btn.appendChild(svgEl);
+				} else {
+					btn.innerText = '?';
+				}
+			} catch(e) {
+				btn.innerText = '!';
+			}
+		} else {
+			const validIcons = getIconIds();
+			if (validIcons.includes(cleanIcon)) {
+				try {
+					setIcon(btn, cleanIcon);
+				} catch (e) {
+					btn.innerText = '?';
+				}
+			} else {
+				// Trata como Emoji ou Texto customizado
+				btn.innerText = cleanIcon;
+			}
 		}
 		return btn;
 	}
@@ -222,8 +249,8 @@ export default class FloatingToolbarPlugin extends Plugin {
 		if (rect.width === 0 && rect.height === 0) return;
 
 		const widthEst = this.settings.commands.reduce((acc, c) => acc + (c.actionType === 'divider' ? 10 : 36), 0) + 12; // 12 for padding
-		const toolbarWidth = widthEst > 100 ? widthEst : 150; 
-		const toolbarHeight = 40; 
+		const toolbarWidth = widthEst > 100 ? widthEst : 150;
+		const toolbarHeight = 40;
 
 		let top = rect.top - toolbarHeight - 10;
 		let left = rect.left + (rect.width / 2) - (toolbarWidth / 2);
@@ -265,9 +292,9 @@ export default class FloatingToolbarPlugin extends Plugin {
 				newStr = `${prefix}${selection}`;
 			}
 		}
-		
+
 		this.activeEditor.replaceSelection(newStr);
-		
+
 		setTimeout(() => {
 			if (this.activeEditor) {
 				this.handleSelection(this.activeEditor);
@@ -286,9 +313,9 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 	}
 
 	display(): void {
-		const {containerEl} = this;
+		const { containerEl } = this;
 		containerEl.empty();
-		containerEl.createEl('h2', {text: 'Botões da Barra Flutuante'});
+		containerEl.createEl('h2', { text: 'Botões da Barra Flutuante' });
 
 		new Setting(containerEl)
 			.setName('Adicionar Comando')
@@ -352,10 +379,17 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 
 				// Ícone
 				new Setting(div)
-					.setName(`Ícone Visual: ${cmd.icon}`)
-					.setDesc('Escolha dentre os ícones disponíveis no Obsidian.')
+					.setName(`Ícone Visual`)
+					.setDesc('Cole o código <svg> diretamente, digite o nome nativo ou use o botão para escolher no catálogo.')
+					.addTextArea(text => text
+						.setPlaceholder('Lucide ou <svg xmlns=...>')
+						.setValue(cmd.icon)
+						.onChange(async (value) => {
+							cmd.icon = value;
+							await this.plugin.saveSettings();
+						}))
 					.addButton(btn => btn
-						.setButtonText('Escolher Ícone')
+						.setButtonText('Catálogo')
 						.onClick(() => {
 							const modal = new IconSuggestModal(this.app, async (selected) => {
 								cmd.icon = selected;
@@ -426,7 +460,7 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 				const actionContainer = div.createDiv('setting-item-control');
 				actionContainer.style.justifyContent = 'flex-end';
 				actionContainer.style.marginTop = '10px';
-				
+
 				const upBtn = actionContainer.createEl('button', { cls: 'mod-cta' });
 				setIcon(upBtn, 'arrow-up');
 				upBtn.onclick = () => this.moveCommand(index, -1);
@@ -464,11 +498,11 @@ class FloatingToolbarSettingTab extends PluginSettingTab {
 	async moveCommand(index: number, direction: number) {
 		const newIndex = index + direction;
 		if (newIndex < 0 || newIndex >= this.plugin.settings.commands.length) return;
-		
+
 		const temp = this.plugin.settings.commands[newIndex];
 		this.plugin.settings.commands[newIndex] = this.plugin.settings.commands[index];
 		this.plugin.settings.commands[index] = temp;
-		
+
 		await this.plugin.saveSettings();
 		this.display();
 	}
